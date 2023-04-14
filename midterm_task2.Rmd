@@ -1,0 +1,114 @@
+---
+title: "biostat 626 midterm task 2"
+author: "Jiangyu Sun"
+date: "2023-03-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+#setwd()
+set.seed(123)
+Sys.setlocale("LC_TIME","English")
+library(caret)
+library(dplyr)
+library(plyr)
+library(tidyr)
+library(ggplot2)
+library(correlation)
+library(MASS)
+library(e1071)
+library(adabag)
+setwd("G:/My Drive/UMICH/winter 2023/biostat 626/Midterm 1")
+```
+
+2. Build a refined multi-class classifier to classify walking (1), walking_upstairs (2), walking_downstairs (3), sitting (4), standing (5), lying (6), and static postural transition (7)
+
+```{r}
+df<-read.table("training_data.txt",head=TRUE)
+test_data<-read.table("test_data.txt",head=TRUE)
+df$activity=as.factor(df$activity)
+levels(df$activity)[levels(df$activity)=="8"] <- "7"
+levels(df$activity)[levels(df$activity)=="9"] <- "7"
+levels(df$activity)[levels(df$activity)=="10"] <- "7"
+levels(df$activity)[levels(df$activity)=="11"] <- "7"
+levels(df$activity)[levels(df$activity)=="12"] <- "7"
+df2 <- df[,!names(df) %in% "subject"]
+```
+
+```{r}
+#Spliting data as training and test set. 
+indxTrain <- createDataPartition(y = df2$activity,p = 0.8,list = FALSE)
+training <- df2[indxTrain,]
+testing <- df2[-indxTrain,]
+
+#Checking distibution in origanl data and partitioned data
+prop.table(table(training$activity)) * 100
+prop.table(table(testing$activity)) * 100
+prop.table(table(df2$activity)) * 100
+
+#preprocess
+trainX <- training[,names(training) != "activity"]
+preProcValues <- preProcess(x = trainX,method = c("center", "scale"))
+preProcValues
+```
+
+## LDA of training Data
+```{r, echo=T,tidy=T}
+lda.fit=lda(activity~.,
+             data=training,cvType = "folds",nTrainFolds=10) 
+lda.fit$prior
+lda.fit$scaling
+lda.pred = predict(lda.fit, testing)
+ls(lda.pred)
+lda.class = lda.pred$class
+True_Y= testing$activity
+table(lda.class, True_Y)
+mean(lda.class==True_Y)
+```
+
+## LDA prediction and performance with test_data
+```{r, echo=T, tidy=T}
+lda.pred2 = predict(lda.fit, test_data)
+lda.class2 = as.numeric(lda.pred2$class)
+table(lda.class2)
+```
+
+## SVM Analysis with linear
+```{r, echo=T}
+ctrl = trainControl(method="cv", number=10)
+svm.fit<-train(activity~.,data=training,method="svmLinear",trControl=ctrl)
+svm.pred = predict(svm.fit, testing,
+                   decision.values = T)
+True_Y= testing$activity
+mean(svm.pred==True_Y)
+```
+## SVM Prediction with linear with test_data
+```{r, echo=T}
+svm.pred2 = as.numeric(predict(svm.fit, test_data,
+                   decision.values = T))
+table(svm.pred2)
+```
+
+## SVM analysis with radial
+```{r, echo=T}
+ctrl = trainControl(method="cv", number=10)
+svm.fit_r<-train(activity~.,data=training,method="svmRadial",trControl=ctrl)
+svm.pred_r = predict(svm.fit_r, testing,
+                   decision.values = T)
+True_Y= testing$activity
+mean(svm.pred_r==True_Y)
+```
+
+## SVM Prediction with radial with test_data
+```{r, echo=T}
+#predict test_data
+svm.pred_r2 = predict(svm.fit_r, test_data,
+                   decision.values = T)
+table(svm.pred_r2)
+```
+
+```{r}
+# write table
+write.table(lda.pred2, file = "multiclass_3562.txt", row.names = F, col.names = F)
+```
+

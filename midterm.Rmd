@@ -1,0 +1,136 @@
+---
+title: "biostat626 Midterm task 1"
+author: "Jiangyu Sun"
+date: "2023-03-21"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+#setwd()
+set.seed(123)
+Sys.setlocale("LC_TIME","English")
+library(caret)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(correlation)
+library(MASS)
+library(e1071)
+setwd("G:/My Drive/UMICH/winter 2023/biostat 626/Midterm 1")
+```
+
+1. Build a binary classifier to classify the activity of each time window into static (0) and dynamic (1).
+
+```{r}
+df<-read.table("training_data.txt",head=TRUE)
+test_data<-read.table("test_data.txt",head=TRUE)
+df=df %>% mutate (if_dynamic=activity %in% c("1","2","3"))
+df$activity=as.factor(ifelse(df$if_dynamic==TRUE,1,0))
+table(df$if_dynamic)
+df2 <- df[,!names(df) %in% c("subject", "if_dynamic")]
+```
+
+```{r}
+#Spliting data as training and test set. 
+indxTrain <- createDataPartition(y = df2$activity,p = 0.8,list = FALSE)
+training <- df2[indxTrain,]
+testing <- df2[-indxTrain,]
+
+#Checking distibution in origanl data and partitioned data
+prop.table(table(training$activity)) * 100
+prop.table(table(testing$activity)) * 100
+prop.table(table(df2$activity)) * 100
+
+#preprocess
+trainX <- training[,names(training) != "activity"]
+preProcValues <- preProcess(x = trainX,method = c("center", "scale"))
+preProcValues
+```
+
+## Logistic Model 1
+```{r, echo = T, tidy = TRUE,warning=FALSE}
+glm.fits=glm(factor(activity)~.,
+             data=training,
+             family="binomial") 
+glm.probs=predict(glm.fits, testing, type="response")
+glm.pred=rep("0",dim(testing)[1])
+glm.pred[glm.probs>0.5] = "1"
+True_Y= testing$activity
+table(glm.pred, True_Y)
+mean(glm.pred==True_Y)
+#predict test_data
+glm.probs2=predict(glm.fits, test_data, type="response")
+glm.pred2=rep("0",dim(test_data)[1])
+glm.pred2[glm.probs2>0.5] = "1"
+table(glm.pred2)
+```
+## LDA of training Data
+```{r, echo=T,tidy=T}
+lda.fit=lda(activity~.,
+             data=training) 
+lda.fit$prior
+lda.fit$scaling
+lda.pred = predict(lda.fit, testing)
+ls(lda.pred)
+lda.class = lda.pred$class
+True_Y= testing$activity
+table(lda.class, True_Y)
+mean(lda.class==True_Y)
+```
+
+## LDA prediction and performance with test_data
+```{r, echo=T, tidy=T}
+lda.pred2 = predict(lda.fit, test_data)
+lda.class2 = as.numeric(lda.pred2$class)-1
+table(lda.class2)
+```
+## SVM Analysis with linear
+```{r, echo=T}
+svm.fit=svm(activity~., data = training, kernel="linear")
+svm.pred = predict(svm.fit, testing,
+                   decision.values = T)
+True_Y= testing$activity
+mean(svm.pred==True_Y)
+```
+## SVM Prediction with linear with test_data
+```{r, echo=T}
+svm.pred2 = as.numeric(predict(svm.fit, test_data,
+                   decision.values = T))-1
+table(svm.pred2)
+```
+
+## SVM analysis with radial
+```{r, echo=T}
+svm.fit_r=svm(activity~., data = training, kernel="radial")
+svm.pred_r = predict(svm.fit_r, testing,
+                   decision.values = T)
+True_Y= testing$activity
+mean(svm.pred_r==True_Y)
+```
+
+## SVM Prediction with radial with test_data
+```{r, echo=T}
+#predict test_data
+svm.pred_r2 = predict(svm.fit_r, test_data,
+                   decision.values = T)
+table(svm.pred_r2)
+```
+## table
+```{r}
+#knn
+#mean(knnPredict == testing$activity)
+#table(knnPredict2)
+#glm
+mean(glm.pred==True_Y)
+table(glm.pred2)
+#lda
+mean(lda.class==True_Y)
+table(lda.class2)
+#svm linear
+mean(svm.pred==True_Y)
+table(svm.pred2)
+#svm radial
+mean(svm.pred_r==True_Y)
+table(svm.pred_r2)
+write.table(svm.pred2, file = "binary_3562.txt", row.names = F, col.names = F)
+```
